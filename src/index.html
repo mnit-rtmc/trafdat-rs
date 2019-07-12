@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>trafdat - IRIS Traffic Data</title>
+    <link rel="stylesheet" href="trafdat.css">
+</head>
+
+<body>
+<h2>Trafdat - IRIS Traffic Data</h2>
+<p>
+    This site is for the distribution of traffic data collected by the IRIS
+    traffic management system.
+</p>
+<p>
+    There are several types of data requests which can be made.
+    Some parameters for the requests are <code>did</code>,
+    <code>year</code>, <code>date</code>, <code>sid</code> and
+    <code>ext</code>.
+</p>
+
+<table>
+<tr>
+    <th>param</th>
+    <th>Description</th>
+</tr>
+<tr>
+    <td>did</td>
+    <td>District ID of detection system</td>
+</tr>
+<tr>
+    <td>year</td>
+    <td>4-digit year</td>
+</tr>
+<tr>
+    <td>date</td>
+    <td>8-digit date (yyyyMMdd)</td>
+</tr>
+<tr>
+    <td>sid</td>
+    <td>Sensor ID</td>
+</tr>
+<tr>
+    <td>ext</td>
+    <td>Extension (v30, c30, s30, vmc30, vs30, vm30, vl30, pr60, pt60)</td>
+</tr>
+</table>
+
+<br/>
+
+<table>
+<tr>
+    <th class="req">Request form</th>
+    <th>Description</th>
+    <th>Content type</th>
+</tr>
+<tr>
+    <td class="req">/</td>
+    <td>Documentation (this page)</td>
+    <td>text/html</td>
+</tr>
+<tr>
+    <td class="req">/districts</td>
+    <td>Get district IDs</td>
+    <td>application/json</td>
+</tr>
+<tr>
+    <td class="req">/did/year.json</td>
+    <td>Get sampled dates</td>
+    <td>application/json</td>
+</tr>
+<tr>
+    <td class="req">/did/date</td>
+    <td>Get sensors sampled on date</td>
+    <td>application/json</td>
+</tr>
+<tr>
+    <td class="req">/did/date/sid.ext.json</td>
+    <td rowspan="2">Get sensor sample data</td>
+    <td>application/json</td>
+</tr>
+<tr>
+    <td class="req">/did/date/sid.ext</td>
+    <td>application/octet-stream</td>
+</tr>
+</table>
+
+<h3>Deprecated Requests</h3>
+<p>
+    For these requests, the default district ID <code>tms</code> will be used.
+</p>
+<table class="deprecated">
+<tr>
+    <th class="req">Request form</th>
+    <th>Description</th>
+    <th>Content type</th>
+</tr>
+<tr>
+    <td class="req">/year</td>
+    <td>Get sampled dates</td>
+    <td>text/plain</td>
+</tr>
+<tr>
+    <td class="req">/year/date</td>
+    <td>Get sensors sampled on date</td>
+    <td>application/json</td>
+</tr>
+<tr>
+    <td class="req">/year/date/sid.ext.json</td>
+    <td rowspan="2">Get sensor sample data</td>
+    <td>application/json</td>
+</tr>
+<tr>
+    <td class="req">/year/date/sid.ext</td>
+    <td>application/octet-stream</td>
+</tr>
+</table>
+
+<h3>Obsolete Requests</h3>
+<table class="obsolete">
+<tr>
+    <th class="req">Request form</th>
+    <th>Description</th>
+    <th>Content type</th>
+</tr>
+<tr>
+    <td class="req">/did/year</td>
+    <td>Get sampled dates</td>
+    <td>text/plain</td>
+</tr>
+<tr>
+    <td class="req">/did/year/date</td>
+    <td>Get sensors sampled on date</td>
+    <td>application/json</td>
+</tr>
+<tr>
+    <td class="req">/did/year/date/sid.ext.json</td>
+    <td rowspan="2">Get sensor sample data</td>
+    <td>application/json</td>
+</tr>
+<tr>
+    <td class="req">/did/year/date/sid.ext</td>
+    <td>application/octet-stream</td>
+</tr>
+</table>
+
+</body>
+</html>

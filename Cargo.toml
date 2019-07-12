@@ -1,0 +1,11 @@
+[package]
+name = "trafdat-rs"
+version = "0.1.0"
+authors = ["Douglas Lau <doug.lau@state.mn.us>"]
+edition = "2018"
+
+[dependencies]
+actix-web = "1.0"
+env_logger = "0.6"
+log = "0.4"
+zip = "0.5"
