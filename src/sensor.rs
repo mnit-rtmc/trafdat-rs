@@ -2,7 +2,6 @@
 //
 // Copyright (c) 2019  Minnesota Department of Transportation
 //
-
 use actix_web::HttpResponse;
 use std::fs::{File, read_dir};
 use std::fmt::Display;
@@ -23,31 +22,36 @@ const DEXT: &str = ".traffic";
 /// Traffic file extension without dot
 const EXT: &str = "traffic";
 
+/// Extension fragments for sample types, plus sample bytes
 const SAMPLE_TYPES: &[(&str, u64)] = &[
-    ("v", 1), ("o", 2), ("c", 2), ("s", 1),
     ("vmc", 1), ("vs", 1), ("vm", 1), ("vl", 1),
+    ("v", 1), ("o", 2), ("c", 2), ("s", 1),
     ("pr", 2), ("pt", 1),
 ];
 
-const SAMPLE_PERIODS: &[(u32, u64)] = &[
-    (5, 17280), (10, 8640), (15, 5760), (20, 4320), (30, 2880), (60, 1440),
-    (90, 960), (120, 720), (240, 360), (300, 288), (600, 144), (900, 96),
-    (1200, 72), (1800, 48), (3600, 24), (7200, 12), (14400, 6), (28800, 3),
-    (43200, 2), (86400, 1),
+/// Tuples of sample period, number of samples per day
+const SAMPLE_PERIODS: &[(&str, u64)] = &[
+    ("60", 1440), // <- deprecated binning interval (precipitation rate)
+    ("30", 2880), ("20", 4320), ("15", 5760),
+    ("10", 8640), ("6", 14400), ("5", 17280),
 ];
 
+/// Build responses from data
 trait ResponseBuilder {
     fn build(data: Option<Vec<u8>>) -> Option<HttpResponse>;
 }
 
+/// JSON response output
 struct JsonOutput;
 
+/// Build JSON response from data
 impl ResponseBuilder for JsonOutput {
     fn build(data: Option<Vec<u8>>) -> Option<HttpResponse> {
         data.and_then(|b| json_response(build_json(b)))
     }
 }
 
+/// Build JSON response from a Vec
 fn build_json<T: Display>(arr: Vec<T>) -> Option<String> {
     if arr.len() > 0 {
         let mut res = "[".to_string();
@@ -66,6 +70,7 @@ fn build_json<T: Display>(arr: Vec<T>) -> Option<String> {
     }
 }
 
+/// Create a JSON response
 fn json_response(json: Option<String>) -> Option<HttpResponse> {
     json.and_then(|j| Some(HttpResponse::Ok()
         .content_type("application/json")
@@ -73,8 +78,10 @@ fn json_response(json: Option<String>) -> Option<HttpResponse> {
     )
 }
 
+/// Octet stream response output
 struct OctetStreamOutput;
 
+/// Build octet stream response from data
 impl ResponseBuilder for OctetStreamOutput {
     fn build(data: Option<Vec<u8>>) -> Option<HttpResponse> {
         data.and_then(|b| Some(HttpResponse::Ok()
@@ -84,13 +91,9 @@ impl ResponseBuilder for OctetStreamOutput {
     }
 }
 
-pub fn districts_json_str() -> Option<HttpResponse> {
-    let lister = DirLister {};
-    let path = PathBuf::from(BASE_PATH);
-    json_response(build_json(lister.list_dir(&path)))
-}
-
+/// List files in a directory or zip file
 trait FileLister {
+
     /// Check a file or zip entry by name
     fn check<'a, 'b>(&'a self, name: &'b str, dir: bool) -> Option<&'b str>;
 
@@ -138,6 +141,7 @@ trait FileLister {
     }
 }
 
+/// Lister for directories
 struct DirLister;
 
 impl FileLister for DirLister {
@@ -149,6 +153,7 @@ impl FileLister for DirLister {
     }
 }
 
+/// Lister for valid dates
 struct DateLister;
 
 impl FileLister for DateLister {
@@ -167,70 +172,7 @@ impl FileLister for DateLister {
     }
 }
 
-pub fn handle_did_year(district: &str, year: &str) -> Option<HttpResponse> {
-    parse_year(year)
-        .and_then(|_| dates_text(district, year))
-        .and_then(|d| Some(HttpResponse::Ok()
-            .content_type("text/plain").body(d)))
-}
-
-fn parse_year(year: &str) -> Option<i32> {
-    year.parse().ok().filter(|yr| *yr >= 1900 && *yr <= 9999)
-}
-
-fn parse_month(month: &str) -> Option<i32> {
-    month.parse().ok().filter(|mo| *mo >= 1 && *mo <= 12)
-}
-
-fn parse_day(day: &str) -> Option<i32> {
-    day.parse().ok().filter(|da| *da >= 1 && *da <= 31)
-}
-
-fn dates_text(district: &str, year: &str) -> Option<String> {
-    let mut dates = lookup_dates(district, year);
-    if dates.len() > 0 {
-        dates.sort();
-        let mut res = String::new();
-        for date in dates {
-            res.push_str(&date);
-            res.push('\n');
-        }
-        Some(res)
-    } else {
-        None
-    }
-}
-
-fn lookup_dates(district: &str, year: &str) -> Vec<String> {
-    let lister = DateLister {};
-    let mut path = PathBuf::from(BASE_PATH);
-    path.push(district);
-    path.push(year);
-    // FIXME: use streaming from a separate thread
-    lister.list_dir(&path)
-}
-
-pub fn handle_2_params(p1: &str, p2: &str) -> Option<HttpResponse> {
-    handle_did_date(p1, p2)
-        .or_else(|| handle_did_year_date(DISTRICT_DEFAULT, p1, p2))
-        .or_else(|| handle_did_year(p1, p2))
-}
-
-fn handle_did_date(district: &str, date: &str) -> Option<HttpResponse> {
-    if is_valid_date(date) {
-        json_response(build_json(lookup_sensors(district, date)))
-    } else {
-        None
-    }
-}
-
-fn is_valid_date(date: &str) -> bool {
-    date.len() == 8 &&
-    parse_year(&date[..4]).is_some() &&
-    parse_month(&date[4..6]).is_some() &&
-    parse_day(&date[6..8]).is_some()
-}
-
+/// Lister for sensor IDs
 struct SidLister;
 
 impl FileLister for SidLister {
@@ -248,10 +190,98 @@ impl FileLister for SidLister {
     }
 }
 
+/// Lister for sample file extensions
+struct ExtLister<'s> {
+    sid: &'s str,
+}
+
+impl<'s> FileLister for ExtLister<'s> {
+    fn check<'a, 'b>(&'a self, name: &'b str, dir: bool) -> Option<&'b str> {
+        if !dir {
+            let path = Path::new(name);
+            path.file_stem()
+                .and_then(|st| if st == self.sid { Some(()) } else { None })
+                .and_then(|_| path.extension())
+                .and_then(|ext| ext.to_str())
+                .and_then(|ext| sample_file_ext(ext))
+        } else {
+            None
+        }
+    }
+}
+
+/// Parse year parameter
+fn parse_year(year: &str) -> Option<i32> {
+    year.parse().ok().filter(|yr| *yr >= 1900 && *yr <= 9999)
+}
+
+/// Parse month parameter
+fn parse_month(month: &str) -> Option<i32> {
+    month.parse().ok().filter(|mo| *mo >= 1 && *mo <= 12)
+}
+
+/// Parse day parameter
+fn parse_day(day: &str) -> Option<i32> {
+    day.parse().ok().filter(|da| *da >= 1 && *da <= 31)
+}
+
+/// Check if a date is valid
+fn is_valid_date(date: &str) -> bool {
+    date.len() == 8 &&
+    parse_year(&date[..4]).is_some() &&
+    parse_month(&date[4..6]).is_some() &&
+    parse_day(&date[6..8]).is_some()
+}
+
+/// Check if year and date are valid
 fn is_valid_year_date(year: &str, date: &str) -> bool {
     parse_year(year).is_some() && is_valid_date(date)
 }
 
+/// Handle request for dates in a year
+fn handle_dates_text(district: &str, year: &str) -> Option<String> {
+    let mut dates = lookup_dates(district, year);
+    if dates.len() > 0 {
+        dates.sort();
+        let mut res = String::new();
+        for date in dates {
+            res.push_str(&date);
+            res.push('\n');
+        }
+        Some(res)
+    } else {
+        None
+    }
+}
+
+/// Lookup all sampled dates in a year
+fn lookup_dates(district: &str, year: &str) -> Vec<String> {
+    let lister = DateLister {};
+    let mut path = PathBuf::from(BASE_PATH);
+    path.push(district);
+    path.push(year);
+    // FIXME: use streaming from a separate thread
+    lister.list_dir(&path)
+}
+
+/// Handle request for /did/year (plain text)
+fn handle_did_year(district: &str, year: &str) -> Option<HttpResponse> {
+    parse_year(year)
+        .and_then(|_| handle_dates_text(district, year))
+        .and_then(|d| Some(HttpResponse::Ok()
+            .content_type("text/plain").body(d)))
+}
+
+/// Handle request for /did/date (JSON)
+fn handle_did_date(district: &str, date: &str) -> Option<HttpResponse> {
+    if is_valid_date(date) {
+        json_response(build_json(lookup_sensors(district, date)))
+    } else {
+        None
+    }
+}
+
+/// Lookup sampled sensors for one date
 fn lookup_sensors(district: &str, date: &str) -> Vec<String> {
     let mut path = PathBuf::from(BASE_PATH);
     path.push(district);
@@ -265,13 +295,14 @@ fn lookup_sensors(district: &str, date: &str) -> Vec<String> {
     sensors
 }
 
+/// Check a sample file extension
 fn sample_file_ext(ext: &str) -> Option<&str> {
     if ext == "vlog" {
         return Some(ext)
     }
-    for (sample_type, _) in SAMPLE_TYPES {
-        for (period, _) in SAMPLE_PERIODS {
-            if ext == format!("{}{}", sample_type, period) {
+    if let Some((prefix, _)) = sample_type(ext) {
+        if let Some((suffix, _)) = sample_period(ext) {
+            if prefix.len() + suffix.len() == ext.len() {
                 return Some(ext)
             }
         }
@@ -279,20 +310,42 @@ fn sample_file_ext(ext: &str) -> Option<&str> {
     None
 }
 
+/// Get sample type prefix and length for an extension
+fn sample_type(ext: &str) -> Option<(&str, u64)> {
+    for (prefix, len) in SAMPLE_TYPES {
+        if ext.starts_with(prefix) {
+            return Some((prefix, *len))
+        }
+    }
+    None
+}
+
+/// Get sample period suffix and length for an extension
+fn sample_period(ext: &str) -> Option<(&str, u64)> {
+    for (suffix, len) in SAMPLE_PERIODS {
+        if ext.ends_with(suffix) {
+            return Some((suffix, *len))
+        }
+    }
+    None
+}
+
+/// Check length of a sample file with extension
 fn is_valid_sample_len(ext: &str, len: u64) -> bool {
     if ext == "vlog" {
         return true
     }
-    for (sample_type, slen) in SAMPLE_TYPES {
-        for (period, plen) in SAMPLE_PERIODS {
-            if ext == format!("{}{}", sample_type, period) {
-                return (slen * plen) == len
+    if let Some((prefix, tlen)) = sample_type(ext) {
+        if let Some((suffix, plen)) = sample_period(ext) {
+            if prefix.len() + suffix.len() == ext.len() {
+                return (tlen * plen) == len
             }
         }
     }
     false
 }
 
+/// Handle request for sensors sampled on a date
 fn handle_did_year_date(district: &str, year: &str, date: &str)
     -> Option<HttpResponse>
 {
@@ -307,38 +360,22 @@ fn handle_did_year_date(district: &str, year: &str, date: &str)
     }
 }
 
+/// Handle bad request
 fn bad_request() -> HttpResponse {
     HttpResponse::BadRequest().body("Bad request")
 }
 
-pub fn handle_2_params_json(p1: &str, p2: &str) -> Option<HttpResponse> {
-    handle_did_year_json(p1, p2)
-}
-
+/// Handle request for sampled dates /did/year (JSON)
 fn handle_did_year_json(district: &str, year: &str) -> Option<HttpResponse> {
-    parse_year(year).and_then(|_| dates_json(district, year))
+    parse_year(year).and_then(|_| lookup_dates_json(district, year))
 }
 
-fn dates_json(district: &str, year: &str) -> Option<HttpResponse> {
+/// Lookup all sampled dates in a year (JSON)
+fn lookup_dates_json(district: &str, year: &str) -> Option<HttpResponse> {
     json_response(build_json(lookup_dates(district, year)))
 }
 
-pub fn handle_3_params_json(p1: &str, p2: &str, p3: &str)
-    -> Option<HttpResponse>
-{
-    handle_did_date_sidext::<JsonOutput>(p1, p2, p3)
-        .or_else(|| handle_did_date_sid(p1, p2, p3))
-        .or_else(|| handle_did_year_date_sidext::<JsonOutput>(DISTRICT_DEFAULT,
-            p1, p2, p3))
-}
-
-pub fn handle_3_params(p1: &str, p2: &str, p3: &str) -> Option<HttpResponse> {
-    handle_did_date_sidext::<OctetStreamOutput>(p1, p2, p3)
-        .or_else(|| handle_did_year_date_sidext::<OctetStreamOutput>(
-            DISTRICT_DEFAULT, p1, p2, p3))
-        .or_else(|| handle_did_year_date(p1, p2, p3))
-}
-
+/// Handle request for sampled data
 fn handle_did_date_sidext<B>(district: &str, date: &str, sid_ext: &str)
     -> Option<HttpResponse>
     where B: ResponseBuilder
@@ -352,6 +389,7 @@ fn handle_did_date_sidext<B>(district: &str, date: &str, sid_ext: &str)
     None
 }
 
+/// Handle request for sampled data
 fn handle_did_date_sid_ext<B>(district: &str, date: &str, sid: &str, ext: &str)
     -> Option<HttpResponse>
     where B: ResponseBuilder
@@ -367,6 +405,7 @@ fn handle_did_date_sid_ext<B>(district: &str, date: &str, sid: &str, ext: &str)
     }
 }
 
+/// Read sampled data from a path
 fn read_path_sid_ext(path: &mut PathBuf, sid: &str, ext: &str)
     -> Option<Vec<u8>>
 {
@@ -405,6 +444,7 @@ fn read_path_sid_ext(path: &mut PathBuf, sid: &str, ext: &str)
     None
 }
 
+/// Handle request for sampled extensions
 fn handle_did_date_sid(district: &str, date: &str, sid: &str)
     -> Option<HttpResponse>
 {
@@ -415,10 +455,11 @@ fn handle_did_date_sid(district: &str, date: &str, sid: &str)
     }
 }
 
+/// Lookup sampled extensions for a sensor
 fn lookup_ext(district: &str, date: &str, sid: &str) -> Vec<String> {
     let mut path = PathBuf::from(BASE_PATH);
     path.push(district);
-    path.push(&date[..4]);
+    path.push(&date[..4]); // year
     path.push(date);
     let lister = ExtLister { sid };
     let mut exts = lister.list_dir(&path);
@@ -427,25 +468,7 @@ fn lookup_ext(district: &str, date: &str, sid: &str) -> Vec<String> {
     exts
 }
 
-struct ExtLister<'s> {
-    sid: &'s str,
-}
-
-impl<'s> FileLister for ExtLister<'s> {
-    fn check<'a, 'b>(&'a self, name: &'b str, dir: bool) -> Option<&'b str> {
-        if !dir {
-            let path = Path::new(name);
-            path.file_stem()
-                .and_then(|st| if st == self.sid { Some(()) } else { None })
-                .and_then(|_| path.extension())
-                .and_then(|ext| ext.to_str())
-                .and_then(|ext| sample_file_ext(ext))
-        } else {
-            None
-        }
-    }
-}
-
+/// Handle request for sampled data
 fn handle_did_year_date_sidext<B>(district: &str, year: &str, date: &str,
     sid_ext: &str) -> Option<HttpResponse>
     where B: ResponseBuilder
@@ -459,4 +482,46 @@ fn handle_did_year_date_sidext<B>(district: &str, year: &str, date: &str,
     } else {
         None
     }
+}
+
+/// Handle districts request
+pub fn handle_districts_json() -> Option<HttpResponse> {
+    let lister = DirLister {};
+    let path = PathBuf::from(BASE_PATH);
+    json_response(build_json(lister.list_dir(&path)))
+}
+
+/// Handle request with one parameter
+pub fn handle_1_param(year: &str) -> Option<HttpResponse> {
+    handle_did_year(DISTRICT_DEFAULT, year)
+}
+
+/// Handle JSON request with two parameters
+pub fn handle_2_params_json(p1: &str, p2: &str) -> Option<HttpResponse> {
+    handle_did_year_json(p1, p2)
+}
+
+/// Handle request with two parameters
+pub fn handle_2_params(p1: &str, p2: &str) -> Option<HttpResponse> {
+    handle_did_date(p1, p2)
+        .or_else(|| handle_did_year_date(DISTRICT_DEFAULT, p1, p2))
+        .or_else(|| handle_did_year(p1, p2))
+}
+
+/// Handle JSON request with three parameters
+pub fn handle_3_params_json(p1: &str, p2: &str, p3: &str)
+    -> Option<HttpResponse>
+{
+    handle_did_date_sidext::<JsonOutput>(p1, p2, p3)
+        .or_else(|| handle_did_date_sid(p1, p2, p3))
+        .or_else(|| handle_did_year_date_sidext::<JsonOutput>(DISTRICT_DEFAULT,
+            p1, p2, p3))
+}
+
+/// Handle request with three parameters
+pub fn handle_3_params(p1: &str, p2: &str, p3: &str) -> Option<HttpResponse> {
+    handle_did_date_sidext::<OctetStreamOutput>(p1, p2, p3)
+        .or_else(|| handle_did_year_date_sidext::<OctetStreamOutput>(
+            DISTRICT_DEFAULT, p1, p2, p3))
+        .or_else(|| handle_did_year_date(p1, p2, p3))
 }
