@@ -4,7 +4,7 @@
 //
 
 use actix_web::HttpResponse;
-use std::fs::{DirEntry, File, read_dir};
+use std::fs::{File, read_dir};
 use std::fmt::Display;
 use std::fmt::Write;
 use std::io::Read;
@@ -48,6 +48,31 @@ impl ResponseBuilder for JsonOutput {
     }
 }
 
+fn build_json<T: Display>(arr: Vec<T>) -> Option<String> {
+    if arr.len() > 0 {
+        let mut res = "[".to_string();
+        for val in arr {
+            if res.len() > 1 {
+                res.push(',');
+            }
+            res.push('"');
+            write!(&mut res, "{}", val).unwrap();
+            res.push('"');
+        }
+        res.push(']');
+        Some(res)
+    } else {
+        None
+    }
+}
+
+fn json_response(json: Option<String>) -> Option<HttpResponse> {
+    json.and_then(|j| Some(HttpResponse::Ok()
+        .content_type("application/json")
+        .body(j))
+    )
+}
+
 struct OctetStreamOutput;
 
 impl ResponseBuilder for OctetStreamOutput {
@@ -60,27 +85,86 @@ impl ResponseBuilder for OctetStreamOutput {
 }
 
 pub fn districts_json_str() -> Option<HttpResponse> {
+    let lister = DirLister {};
     let path = PathBuf::from(BASE_PATH);
-    json_response(build_json(list_dir(&path, dir_name)))
+    json_response(build_json(lister.list_dir(&path)))
 }
 
-/// Get a list of entries in a path
-fn list_dir(path: &Path, f: fn(DirEntry) -> Option<String>) -> Vec<String> {
-    let mut list = vec![];
-    if let Ok(entries) = read_dir(path) {
-        for entry in entries {
-            if let Some(e) = entry.ok().and_then(|ent| f(ent)) {
-                list.push(e)
+trait FileLister {
+    /// Check a file or zip entry by name
+    fn check<'a, 'b>(&'a self, name: &'b str, dir: bool) -> Option<&'b str>;
+
+    /// Get a list of entries in a directory
+    fn list_dir(&self, path: &Path) -> Vec<String> {
+        let mut list = vec![];
+        if let Ok(entries) = read_dir(path) {
+            for entry in entries {
+                if let Ok(ent) = entry {
+                    if let Ok(tp) = ent.file_type() {
+                        if !tp.is_symlink() {
+                            if let Some(name) = ent.file_name().to_str() {
+                                if let Some(e) = self.check(name, tp.is_dir()) {
+                                    list.push(e.to_string())
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
+        list
     }
-    list
+
+    /// Get a list of entries in a zip file
+    fn list_zip(&self, path: &Path) -> Vec<String> {
+        let mut list = vec![];
+        if let Ok(file) = File::open(path) {
+            if let Ok(mut zip) = ZipArchive::new(file) {
+                for i in 0..zip.len() {
+                    if let Ok(zf) = zip.by_index(i) {
+                        let ent = Path::new(zf.name());
+                        if let Some(name) = ent.file_name() {
+                            if let Some(name) = name.to_str() {
+                                if let Some(e) = self.check(name, false) {
+                                    list.push(e.to_string())
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        list
+    }
 }
 
-fn dir_name(ent: DirEntry) -> Option<String> {
-    ent.file_type().ok()
-        .filter(|tp| tp.is_dir() && !tp.is_symlink())
-        .and_then(|_| ent.file_name().to_str().and_then(|n| Some(n.to_string())))
+struct DirLister;
+
+impl FileLister for DirLister {
+    fn check<'a, 'b>(&'a self, name: &'b str, dir: bool) -> Option<&'b str> {
+        match dir {
+            true => Some(name),
+            false => None,
+        }
+    }
+}
+
+struct DateLister;
+
+impl FileLister for DateLister {
+    fn check<'a, 'b>(&'a self, name: &'b str, dir: bool) -> Option<&'b str> {
+        if dir {
+            if is_valid_date(name) {
+                 return Some(name)
+            }
+        } else if name.len() == 16 && name.ends_with(DEXT) {
+            let date = &name[..8];
+            if is_valid_date(date) {
+                 return Some(date)
+            }
+        }
+        None
+    }
 }
 
 pub fn handle_did_year(district: &str, year: &str) -> Option<HttpResponse> {
@@ -118,31 +202,12 @@ fn dates_text(district: &str, year: &str) -> Option<String> {
 }
 
 fn lookup_dates(district: &str, year: &str) -> Vec<String> {
+    let lister = DateLister {};
     let mut path = PathBuf::from(BASE_PATH);
     path.push(district);
     path.push(year);
-
     // FIXME: use streaming from a separate thread
-    list_dir(&path, check_date)
-}
-
-fn check_date(ent: DirEntry) -> Option<String> {
-    if let Ok(file_type) = ent.file_type() {
-        if let Some(name) = ent.file_name().to_str() {
-            if file_type.is_dir() && !file_type.is_symlink() {
-                if is_valid_date(name) {
-                     return Some(name.to_string())
-                }
-            } else if file_type.is_file() {
-                if name.len() == 16 && name.ends_with(DEXT) {
-                    if is_valid_date(&name[..8]) {
-                         return Some(name[..8].to_string())
-                    }
-                }
-            }
-        }
-    }
-    None
+    lister.list_dir(&path)
 }
 
 pub fn handle_2_params(p1: &str, p2: &str) -> Option<HttpResponse> {
@@ -166,6 +231,23 @@ fn is_valid_date(date: &str) -> bool {
     parse_day(&date[6..8]).is_some()
 }
 
+struct SidLister;
+
+impl FileLister for SidLister {
+    fn check<'a, 'b>(&'a self, name: &'b str, dir: bool) -> Option<&'b str> {
+        if !dir {
+            let path = Path::new(name);
+            path.extension()
+                .and_then(|ext| ext.to_str())
+                .and_then(|ext| sample_file_ext(ext))
+                .and_then(|_| path.file_stem())
+                .and_then(|f| f.to_str())
+        } else {
+            None
+        }
+    }
+}
+
 fn is_valid_year_date(year: &str, date: &str) -> bool {
     parse_year(year).is_some() && is_valid_date(date)
 }
@@ -175,41 +257,12 @@ fn lookup_sensors(district: &str, date: &str) -> Vec<String> {
     path.push(district);
     path.push(&date[..4]);
     path.push(date);
-
     // FIXME: use streaming from a separate thread
-    let mut sensors = list_dir(&path, check_sensor);
-
+    let lister = SidLister {};
+    let mut sensors = lister.list_dir(&path);
     path.set_extension(EXT);
-    if let Ok(file) = File::open(path) {
-        if let Ok(mut zip) = ZipArchive::new(file) {
-            for i in 0..zip.len() {
-                if let Ok(zf) = zip.by_index(i) {
-                    let name = &zf.sanitized_name();
-                    if let Some(sensor) = sample_file_sensor_id(name) {
-                        sensors.push(sensor.to_string())
-                    }
-                }
-            }
-        }
-    }
+    sensors.extend(lister.list_zip(&path));
     sensors
-}
-
-fn check_sensor(ent: DirEntry) -> Option<String> {
-    ent.file_type()
-        .ok()
-        .filter(|tp| tp.is_file() && !tp.is_symlink())
-        .and_then(|_| sample_file_sensor_id(&ent.path())
-            .and_then(|sid| Some(sid.to_string()))
-        )
-}
-
-fn sample_file_sensor_id(name: &PathBuf) -> Option<&str> {
-    name.extension()
-        .and_then(|ext| ext.to_str())
-        .and_then(|ext| sample_file_ext(ext))
-        .and_then(|_| name.file_stem())
-        .and_then(|f| f.to_str())
 }
 
 fn sample_file_ext(ext: &str) -> Option<&str> {
@@ -258,7 +311,11 @@ fn bad_request() -> HttpResponse {
     HttpResponse::BadRequest().body("Bad request")
 }
 
-pub fn handle_did_year_json(district: &str, year: &str) -> Option<HttpResponse>{
+pub fn handle_2_params_json(p1: &str, p2: &str) -> Option<HttpResponse> {
+    handle_did_year_json(p1, p2)
+}
+
+fn handle_did_year_json(district: &str, year: &str) -> Option<HttpResponse> {
     parse_year(year).and_then(|_| dates_json(district, year))
 }
 
@@ -266,35 +323,11 @@ fn dates_json(district: &str, year: &str) -> Option<HttpResponse> {
     json_response(build_json(lookup_dates(district, year)))
 }
 
-fn json_response(json: Option<String>) -> Option<HttpResponse> {
-    json.and_then(|j| Some(HttpResponse::Ok()
-        .content_type("application/json")
-        .body(j))
-    )
-}
-
-fn build_json<T: Display>(arr: Vec<T>) -> Option<String> {
-    if arr.len() > 0 {
-        let mut res = "[".to_string();
-        for val in arr {
-            if res.len() > 1 {
-                res.push(',');
-            }
-            res.push('"');
-            write!(&mut res, "{}", val).unwrap();
-            res.push('"');
-        }
-        res.push(']');
-        Some(res)
-    } else {
-        None
-    }
-}
-
 pub fn handle_3_params_json(p1: &str, p2: &str, p3: &str)
     -> Option<HttpResponse>
 {
     handle_did_date_sidext::<JsonOutput>(p1, p2, p3)
+        .or_else(|| handle_did_date_sid(p1, p2, p3))
         .or_else(|| handle_did_year_date_sidext::<JsonOutput>(DISTRICT_DEFAULT,
             p1, p2, p3))
 }
@@ -370,6 +403,47 @@ fn read_path_sid_ext(path: &mut PathBuf, sid: &str, ext: &str)
     }
     // FIXME: open .vlog
     None
+}
+
+fn handle_did_date_sid(district: &str, date: &str, sid: &str)
+    -> Option<HttpResponse>
+{
+    if is_valid_date(date) {
+        json_response(build_json(lookup_ext(district, date, sid)))
+    } else {
+        None
+    }
+}
+
+fn lookup_ext(district: &str, date: &str, sid: &str) -> Vec<String> {
+    let mut path = PathBuf::from(BASE_PATH);
+    path.push(district);
+    path.push(&date[..4]);
+    path.push(date);
+    let lister = ExtLister { sid };
+    let mut exts = lister.list_dir(&path);
+    path.set_extension(EXT);
+    exts.extend(lister.list_zip(&path));
+    exts
+}
+
+struct ExtLister<'s> {
+    sid: &'s str,
+}
+
+impl<'s> FileLister for ExtLister<'s> {
+    fn check<'a, 'b>(&'a self, name: &'b str, dir: bool) -> Option<&'b str> {
+        if !dir {
+            let path = Path::new(name);
+            path.file_stem()
+                .and_then(|st| if st == self.sid { Some(()) } else { None })
+                .and_then(|_| path.extension())
+                .and_then(|ext| ext.to_str())
+                .and_then(|ext| sample_file_ext(ext))
+        } else {
+            None
+        }
+    }
 }
 
 fn handle_did_year_date_sidext<B>(district: &str, year: &str, date: &str,

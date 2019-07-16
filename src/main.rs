@@ -82,7 +82,7 @@ fn handle_1(req: HttpRequest) -> HttpResponse {
 fn handle_2_json(req: HttpRequest) -> HttpResponse {
     req.match_info().get("p1")
         .and_then(|p1| req.match_info().get("p2")
-            .and_then(|p2| handle_did_year_json(p1, p2))
+            .and_then(|p2| handle_2_params_json(p1, p2))
         ).unwrap_or_else(|| not_found())
 }
 
