@@ -22,7 +22,7 @@ fn main() {
     env_logger::Builder::from_default_env()
         .default_format_timestamp(false)
         .init();
-    let res = run_server("0.0.0.0:8088");
+    let res = run_server("0.0.0.0:8080");
     if let Err(e) = &res {
         error!("{:?}", e);
         res.unwrap();
