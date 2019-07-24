@@ -415,11 +415,8 @@ fn read_path_sid_ext(path: &mut PathBuf, sid: &str, ext: &str)
     if let Ok(mut file) = File::open(&path) {
         if let Ok(metadata) = file.metadata() {
             let len = metadata.len();
-            if is_valid_sample_len(ext, len) {
-                let mut data = vec![0; len as usize];
-                if let Ok(()) = file.read_exact(&mut data[..]) {
-                    return Some(data)
-                }
+            if let Some(data) = read_sample_data(&mut file, ext, len) {
+                return Some(data)
             }
         }
     } else {
@@ -430,17 +427,27 @@ fn read_path_sid_ext(path: &mut PathBuf, sid: &str, ext: &str)
                 let name = format!("{}.{}", sid, ext);
                 if let Ok(mut zf) = zip.by_name(&name) {
                     let len = zf.size();
-                    if is_valid_sample_len(ext, len) {
-                        let mut data = vec![0; len as usize];
-                        if let Ok(()) = zf.read_exact(&mut data[..]) {
-                            return Some(data)
-                        }
+                    if let Some(data) = read_sample_data(&mut zf, ext, len) {
+                        return Some(data)
                     }
                 }
             }
         }
     }
     // FIXME: open .vlog
+    None
+}
+
+/// Read sampled data from a reader
+fn read_sample_data<R: Read>(reader: &mut R, ext: &str, len: u64)
+    -> Option<Vec<u8>>
+{
+    if is_valid_sample_len(ext, len) {
+        let mut data = vec![0; len as usize];
+        if let Ok(()) = reader.read_exact(&mut data[..]) {
+            return Some(data)
+        }
+    }
     None
 }
 
