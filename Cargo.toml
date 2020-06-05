@@ -1,6 +1,6 @@
 [package]
 name = "trafdat-rs"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Douglas Lau <doug.lau@state.mn.us>"]
 edition = "2018"
 
@@ -9,3 +9,9 @@ actix-web = "1.0"
 env_logger = "0.6"
 log = "0.4"
 zip = "0.5"
+serde-xml-rs = "0.4"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+flate2 = "1.0"
+regex = "1"
+unicode-segmentation = "1.6.0"
