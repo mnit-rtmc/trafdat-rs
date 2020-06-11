@@ -44,8 +44,8 @@ fn run_server(sock_addr: &str) -> Result<(), Error> {
                 .route("/metro_config/{p1}.xml", web::to(handle_metro_1_xml))
                 .route("/{p1}/{p2}.json", web::to(handle_2_json))
                 .route("/{p1}/{p2}", web::to(handle_2))
-                .route("/metro_config/{p1}/{p2}.json", web::to(handle_metro_2_json))
-                .route("/metro_config/{p1}/{p2}.xml", web::to(handle_metro_2_xml))
+                .route("/metro_config/{p1}/{p2}_{p3}.json", web::to(handle_metro_3_json))
+                .route("/metro_config/{p1}/{p2}_{p3}.xml", web::to(handle_metro_3_xml))
                 .route("/{p1}/{p2}/{p3}.json", web::to(handle_3_json))
                 .route("/{p1}/{p2}/{p3}", web::to(handle_3))
         )
@@ -91,18 +91,22 @@ fn handle_metro_1_json(req: HttpRequest) -> HttpResponse {
 }
 
 /// Handle a request for metro_config xml with 2 parameters
-fn handle_metro_2_xml(req: HttpRequest) -> HttpResponse {
+fn handle_metro_3_xml(req: HttpRequest) -> HttpResponse {
     req.match_info().get("p1")
         .and_then(|p1| req.match_info().get("p2")
-            .and_then(|p2| metro::handle_2_params_xml(p1, p2))
+            .and_then(|p2| req.match_info().get("p3")
+                .and_then(|p3| metro::handle_3_params_xml(p1, p2, p3))
+            )
         ).unwrap_or_else(|| not_found())
 }
 
 /// Handle a request for metro_config json with 2 parameters
-fn handle_metro_2_json(req: HttpRequest) -> HttpResponse {
+fn handle_metro_3_json(req: HttpRequest) -> HttpResponse {
     req.match_info().get("p1")
         .and_then(|p1| req.match_info().get("p2")
-            .and_then(|p2| metro::handle_2_params_json(p1, p2))
+            .and_then(|p2| req.match_info().get("p3")
+                .and_then(|p3| metro::handle_3_params_json(p1, p2, p3))
+            )
         ).unwrap_or_else(|| not_found())
 }
 

@@ -10,7 +10,9 @@ use serde_xml_rs::{from_str};
 use serde::{Serialize, Deserialize};
 use serde_json;
 use flate2::read::GzDecoder;
-use regex::Regex;
+use libxml::parser::Parser;
+use libxml::xpath::Context;
+use libxml::tree::document::Document;
 use unicode_segmentation::UnicodeSegmentation;
 
 #[derive(Serialize, Deserialize, PartialEq, Debug)]
@@ -271,18 +273,20 @@ fn get_xml_file(date: &str) -> Option<String> {
 }
 
 /// Using the metro config raw XML, find the proper corridor
-fn get_corridor_on_date(metro_file_option: Option<String>, cor: &str) -> Option<String> {
+fn get_corridor_on_date(metro_file_option: Option<String>, rte: &str, dir: &str) -> Option<String> {
     if let Some(metro_file) = metro_file_option {
-        let rte = &cor[..cor.graphemes(true).count() - 2];
-        let dir = &cor[cor.graphemes(true).count() - 2..];
-        let re = Regex::new(
-            &format!(r"<corridor[[:space:]]+(route='{}'|dir='{}')[[:space:]]+(route='{}'|dir='{}')>(.|[\n\r])*?</corridor>",
-                rte, dir, rte, dir)).unwrap();
-        let mut res = String::new();
-        for mat in re.find_iter(&metro_file) {
-            res.push_str(mat.as_str());
+        let parser : Parser = Default::default();
+        let doc : Document = parser.parse_string(metro_file).unwrap();
+        let mut context = Context::new(&doc).unwrap();
+        let xpth : &str = &format!("//corridor[@route='{}' and @dir='{}']", rte, dir);
+        if let Ok(cors) = context.findnodes(xpth, None) {
+            if cors.len() > 0 {
+                let cor = doc.node_to_string(&cors[0]);
+                if cor.graphemes(true).count() > 0 {
+                    return Some(cor);
+                }
+            }
         }
-        if !res.is_empty() { return Some(res) }
     }
     None
 }
@@ -305,19 +309,19 @@ pub fn handle_1_param_json(p1: &str) -> Option<HttpResponse> {
     }
 }
 
-/// Handle metro_config XML request with two parameters (date and corridor)
-pub fn handle_2_params_xml(p1: &str, p2: &str) -> Option<HttpResponse> {
+/// Handle metro_config XML request with two parameters (date, corridor, and direction)
+pub fn handle_3_params_xml(p1: &str, p2: &str, p3: &str) -> Option<HttpResponse> {
     if is_valid_date(p1) {
-        xml_response(get_corridor_on_date(get_xml_file(p1), p2))
+        xml_response(get_corridor_on_date(get_xml_file(p1), p2, p3))
     } else {
         None
     }
 }
 
-/// Handle metro_config JSON request with two parameters (date and corridor)
-pub fn handle_2_params_json(p1: &str, p2: &str) -> Option<HttpResponse> {
+/// Handle metro_config JSON request with two parameters (date, corridor, and direction)
+pub fn handle_3_params_json(p1: &str, p2: &str, p3: &str) -> Option<HttpResponse> {
     if is_valid_date(p1) {
-        json_response(build_json(get_corridor_on_date(get_xml_file(p1), p2)))
+        json_response(build_json(get_corridor_on_date(get_xml_file(p1), p2, p3)))
     } else {
         None
     }
