@@ -272,6 +272,37 @@ fn get_xml_file(date: &str) -> Option<String> {
     None
 }
 
+/// Get the list of corridors in the XML file as JSON
+fn get_corridors(metro_file_option: Option<String>) -> Option<String> {
+    if let Some(metro_file) = metro_file_option {
+        let parser : Parser = Default::default();
+        let doc : Document = parser.parse_string(metro_file).unwrap();
+        let mut context = Context::new(&doc).unwrap();
+        let xpth = "//corridor/@*[name()='route' or name()='dir']";
+        if let Ok(cors) = context.findnodes(xpth, None) {
+            if cors.len() > 0 {
+                let mut res = "[".to_owned();
+                for i in (0..cors.len()).step_by(2) {
+                    if i > 0 {
+                        res.push(',');
+                    }
+                    let rte = doc.node_to_string(&cors[i]);
+                    // Trim following " character, add underscore to match request format
+                    let rte = rte[rte.find('=')?+1..rte.len()-1].to_owned() + "_";
+                    let dir = doc.node_to_string(&cors[i+1]);
+                    // Trim leading " character
+                    let dir = dir[dir.find('=')?+2..].to_owned();
+                    let cor = rte + &dir;
+                    res.push_str(&cor);
+                }
+                res.push(']');
+                return Some(res);
+            }
+        }
+    }
+    None
+}
+
 /// Using the metro config raw XML, find the proper corridor
 fn get_corridor_on_date(metro_file_option: Option<String>, rte: &str, dir: &str) -> Option<String> {
     if let Some(metro_file) = metro_file_option {
@@ -304,6 +335,15 @@ pub fn handle_1_param_xml(p1: &str) -> Option<HttpResponse> {
 pub fn handle_1_param_json(p1: &str) -> Option<HttpResponse> {
     if is_valid_date(p1) {
         json_response(build_full_json(get_xml_file(p1)))
+    } else {
+        None
+    }
+}
+
+/// Handle metro_config request for corridors on a date
+pub fn handle_corridors(p1: &str) -> Option<HttpResponse> {
+    if is_valid_date(p1) {
+        json_response(get_corridors(get_xml_file(p1)))
     } else {
         None
     }

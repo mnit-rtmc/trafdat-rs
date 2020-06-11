@@ -44,6 +44,7 @@ fn run_server(sock_addr: &str) -> Result<(), Error> {
                 .route("/metro_config/{p1}.xml", web::to(handle_metro_1_xml))
                 .route("/{p1}/{p2}.json", web::to(handle_2_json))
                 .route("/{p1}/{p2}", web::to(handle_2))
+                .route("/metro_config/{p1}/corridors", web::to(handle_metro_corridors))
                 .route("/metro_config/{p1}/{p2}_{p3}.json", web::to(handle_metro_3_json))
                 .route("/metro_config/{p1}/{p2}_{p3}.xml", web::to(handle_metro_3_xml))
                 .route("/{p1}/{p2}/{p3}.json", web::to(handle_3_json))
@@ -87,6 +88,13 @@ fn handle_metro_1_xml(req: HttpRequest) -> HttpResponse {
 fn handle_metro_1_json(req: HttpRequest) -> HttpResponse {
     req.match_info().get("p1")
         .and_then(|p1| metro::handle_1_param_json(p1))
+        .unwrap_or_else(|| not_found())
+}
+
+/// Handle a request for the corridors on a date
+fn handle_metro_corridors(req: HttpRequest) -> HttpResponse {
+    req.match_info().get("p1")
+        .and_then(|p1| metro::handle_corridors(p1))
         .unwrap_or_else(|| not_found())
 }
 
