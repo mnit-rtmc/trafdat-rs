@@ -16,12 +16,15 @@ td {
     padding-right: 1rem;
     vertical-align: middle;
 }
-.req {
+.req, .prm {
     white-space: nowrap;
+    font-family: monospace;
 }
 .deprecated {
-    background: #ffffe0
+    background: #ffffe0;
 }
 .obsolete {
-    background: #ffd4d4
+    background: #ffd4d4;
 }
+.prm:after { content: ">"; }
+.prm:before { content: "<"; }
