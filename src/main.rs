@@ -1,6 +1,6 @@
 // main.rs
 //
-// Copyright (c) 2019  Minnesota Department of Transportation
+// Copyright (c) 2019-2021  Minnesota Department of Transportation
 //
 #![forbid(unsafe_code)]
 
@@ -20,9 +20,7 @@ const TRAFDAT_CSS: &str = include_str!("trafdat.css");
 
 /// Main function
 fn main() {
-    env_logger::Builder::from_default_env()
-        .default_format_timestamp(false)
-        .init();
+    env_logger::builder().format_timestamp(None).init();
     let res = run_server("0.0.0.0:8080");
     if let Err(e) = &res {
         error!("{:?}", e);
