@@ -3,16 +3,16 @@
 // Copyright (c) 2020 Minnesota Department of Transportation
 //
 use actix_web::HttpResponse;
-use std::io::Read;
-use std::fs::File;
-use std::path::{PathBuf};
-use serde_xml_rs::{from_str};
-use serde::{Serialize, Deserialize};
-use serde_json;
 use flate2::read::GzDecoder;
 use libxml::parser::Parser;
-use libxml::xpath::Context;
 use libxml::tree::document::Document;
+use libxml::xpath::Context;
+use serde::{Deserialize, Serialize};
+use serde_json;
+use serde_xml_rs::from_str;
+use std::fs::File;
+use std::io::Read;
+use std::path::PathBuf;
 use unicode_segmentation::UnicodeSegmentation;
 
 #[derive(Serialize, Deserialize, PartialEq, Debug)]
@@ -132,7 +132,7 @@ struct Commlink {
 struct Controller {
     name: String,
     //active: String,  // Present in XML DTD but not the actual document
-    condition: String,  // Present in document, but not the DTD
+    condition: String, // Present in document, but not the DTD
     drop: String,
     #[serde(default = "implied_str")]
     #[serde(skip_serializing_if = "implied")]
@@ -171,20 +171,44 @@ struct Dms {
 }
 
 /// Functions to implement defaults from the Document Type Definition (DTD)
-fn station_str() -> String { "Station".to_string() }
-fn false_str() -> String { "f".to_string() }
-fn true_str() -> String { "t".to_string() }
-fn zero_str() -> String { "0".to_string() }
-fn none_str() -> String { "None".to_string() }
-fn right_str() -> String { "right".to_string() }
-fn ff_str() -> String { "55".to_string() }
-fn tt_str() -> String { "22.0".to_string() }
-fn tfz_str() -> String { "240".to_string() }
-fn future_str() -> String { "FUTURE".to_string() }
+fn station_str() -> String {
+    "Station".to_string()
+}
+fn false_str() -> String {
+    "f".to_string()
+}
+fn true_str() -> String {
+    "t".to_string()
+}
+fn zero_str() -> String {
+    "0".to_string()
+}
+fn none_str() -> String {
+    "None".to_string()
+}
+fn right_str() -> String {
+    "right".to_string()
+}
+fn ff_str() -> String {
+    "55".to_string()
+}
+fn tt_str() -> String {
+    "22.0".to_string()
+}
+fn tfz_str() -> String {
+    "240".to_string()
+}
+fn future_str() -> String {
+    "FUTURE".to_string()
+}
 /// Used as default for #IMPLIED attributes with no default
-fn implied_str() -> String { "#IMPLIED".to_string() }
+fn implied_str() -> String {
+    "#IMPLIED".to_string()
+}
 /// Used to check if #IMPLIED value should be left out
-fn implied(val : &String) -> bool { val == "#IMPLIED" }
+fn implied(val: &String) -> bool {
+    val == "#IMPLIED"
+}
 
 /// Base metro archive path
 const BASE_PATH: &str = "/var/lib/iris/metro_config";
@@ -193,7 +217,7 @@ const BASE_PATH: &str = "/var/lib/iris/metro_config";
 /// JSON using the above structs
 fn build_full_json(xmldoc: Option<String>) -> Option<String> {
     xmldoc.and_then(|xmldoc| {
-        let res : Result<TmsConfig, _> = from_str(&xmldoc);
+        let res: Result<TmsConfig, _> = from_str(&xmldoc);
         if let Ok(_tmsconfig) = res {
             if let Ok(js) = serde_json::to_string(&_tmsconfig) {
                 Some(js)
@@ -210,7 +234,7 @@ fn build_full_json(xmldoc: Option<String>) -> Option<String> {
 /// JSON using the above structs
 fn build_json(xmldoc: Option<String>) -> Option<String> {
     xmldoc.and_then(|xmldoc| {
-        let res : Result<Corridor, _> = from_str(&xmldoc);
+        let res: Result<Corridor, _> = from_str(&xmldoc);
         if let Ok(_corridor) = res {
             if let Ok(js) = serde_json::to_string(&_corridor) {
                 Some(js)
@@ -225,18 +249,16 @@ fn build_json(xmldoc: Option<String>) -> Option<String> {
 
 /// Takes the XML string and builds the response
 fn xml_response(xml: Option<String>) -> Option<HttpResponse> {
-    xml.and_then(|x| Some(HttpResponse::Ok()
-        .content_type("application/xml")
-        .body(x))
-    )
+    xml.and_then(|x| {
+        Some(HttpResponse::Ok().content_type("application/xml").body(x))
+    })
 }
 
 /// Takes the JSON string and builds the response
 fn json_response(json: Option<String>) -> Option<HttpResponse> {
-    json.and_then(|j| Some(HttpResponse::Ok()
-        .content_type("application/json")
-        .body(j))
-    )
+    json.and_then(|j| {
+        Some(HttpResponse::Ok().content_type("application/json").body(j))
+    })
 }
 
 fn parse_year(year: &str) -> Option<i32> {
@@ -252,10 +274,10 @@ fn parse_day(day: &str) -> Option<i32> {
 }
 
 fn is_valid_date(date: &str) -> bool {
-    date.len() == 8 &&
-    parse_year(&date[..4]).is_some() &&
-    parse_month(&date[4..6]).is_some() &&
-    parse_day(&date[6..8]).is_some()
+    date.len() == 8
+        && parse_year(&date[..4]).is_some()
+        && parse_month(&date[4..6]).is_some()
+        && parse_day(&date[6..8]).is_some()
 }
 
 /// Get the metro_config.xml.gz file for the specified date and extract it
@@ -275,8 +297,8 @@ fn get_xml_file(date: &str) -> Option<String> {
 /// Get the list of corridors in the XML file as JSON
 fn get_corridors(metro_file_option: Option<String>) -> Option<String> {
     if let Some(metro_file) = metro_file_option {
-        let parser : Parser = Default::default();
-        let doc : Document = parser.parse_string(metro_file).unwrap();
+        let parser: Parser = Default::default();
+        let doc: Document = parser.parse_string(metro_file).unwrap();
         let mut context = Context::new(&doc).unwrap();
         let xpth = "//corridor/@*[name()='route' or name()='dir']";
         if let Ok(cors) = context.findnodes(xpth, None) {
@@ -288,10 +310,11 @@ fn get_corridors(metro_file_option: Option<String>) -> Option<String> {
                     }
                     let rte = doc.node_to_string(&cors[i]);
                     // Trim following " character, add underscore to match request format
-                    let rte = rte[rte.find('=')?+1..rte.len()-1].to_owned() + "_";
-                    let dir = doc.node_to_string(&cors[i+1]);
+                    let rte =
+                        rte[rte.find('=')? + 1..rte.len() - 1].to_owned() + "_";
+                    let dir = doc.node_to_string(&cors[i + 1]);
                     // Trim leading " character
-                    let dir = dir[dir.find('=')?+2..].to_owned();
+                    let dir = dir[dir.find('=')? + 2..].to_owned();
                     let cor = rte + &dir;
                     res.push_str(&cor);
                 }
@@ -304,12 +327,17 @@ fn get_corridors(metro_file_option: Option<String>) -> Option<String> {
 }
 
 /// Using the metro config raw XML, find the proper corridor
-fn get_corridor_on_date(metro_file_option: Option<String>, rte: &str, dir: &str) -> Option<String> {
+fn get_corridor_on_date(
+    metro_file_option: Option<String>,
+    rte: &str,
+    dir: &str,
+) -> Option<String> {
     if let Some(metro_file) = metro_file_option {
-        let parser : Parser = Default::default();
-        let doc : Document = parser.parse_string(metro_file).unwrap();
+        let parser: Parser = Default::default();
+        let doc: Document = parser.parse_string(metro_file).unwrap();
         let mut context = Context::new(&doc).unwrap();
-        let xpth : &str = &format!("//corridor[@route='{}' and @dir='{}']", rte, dir);
+        let xpth: &str =
+            &format!("//corridor[@route='{}' and @dir='{}']", rte, dir);
         if let Ok(cors) = context.findnodes(xpth, None) {
             if cors.len() > 0 {
                 let cor = doc.node_to_string(&cors[0]);
@@ -350,7 +378,11 @@ pub fn handle_corridors(p1: &str) -> Option<HttpResponse> {
 }
 
 /// Handle metro_config XML request with two parameters (date, corridor, and direction)
-pub fn handle_3_params_xml(p1: &str, p2: &str, p3: &str) -> Option<HttpResponse> {
+pub fn handle_3_params_xml(
+    p1: &str,
+    p2: &str,
+    p3: &str,
+) -> Option<HttpResponse> {
     if is_valid_date(p1) {
         xml_response(get_corridor_on_date(get_xml_file(p1), p2, p3))
     } else {
@@ -359,9 +391,17 @@ pub fn handle_3_params_xml(p1: &str, p2: &str, p3: &str) -> Option<HttpResponse>
 }
 
 /// Handle metro_config JSON request with two parameters (date, corridor, and direction)
-pub fn handle_3_params_json(p1: &str, p2: &str, p3: &str) -> Option<HttpResponse> {
+pub fn handle_3_params_json(
+    p1: &str,
+    p2: &str,
+    p3: &str,
+) -> Option<HttpResponse> {
     if is_valid_date(p1) {
-        json_response(build_json(get_corridor_on_date(get_xml_file(p1), p2, p3)))
+        json_response(build_json(get_corridor_on_date(
+            get_xml_file(p1),
+            p2,
+            p3,
+        )))
     } else {
         None
     }
